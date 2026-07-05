@@ -1,0 +1,15 @@
+{
+  "name": "personal-diary-app",
+  "version": "1.0.0",
+  "description": "Personal diary application with JSON file persistence",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.19.0",
+    "express-session": "^1.5.0"
+  }
+}

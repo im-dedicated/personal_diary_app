@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Personal Diary</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; background: #f5f7fb; color: #222; }
+      .container { max-width: 900px; margin: 2rem auto; padding: 1rem; }
+      .card { background: white; padding: 1rem 1.25rem; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.08); margin-bottom: 1rem; }
+      form { display: flex; flex-direction: column; gap: .75rem; }
+      input, textarea, button { padding: .7rem; border-radius: 6px; border: 1px solid #ccc; font-size: 1rem; }
+      button { cursor: pointer; background: #2563eb; color: white; border: none; }
+      button.secondary { background: #64748b; }
+      .hidden { display: none; }
+      .entry { border: 1px solid #e5e7eb; padding: .8rem; border-radius: 8px; margin-bottom: .75rem; }
+      .actions { display: flex; gap: .5rem; margin-top: .5rem; }
+      .topbar { display: flex; justify-content: space-between; align-items: center; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="topbar">
+        <h1>Personal Diary</h1>
+        <div id="authBar"></div>
+      </div>
+
+      <div id="authView" class="card">
+        <h2>Register / Login</h2>
+        <form id="authForm">
+          <input id="username" name="username" placeholder="Username" required />
+          <input id="password" name="password" type="password" placeholder="Password" required />
+          <div class="actions">
+            <button type="submit" id="submitBtn">Login</button>
+            <button type="button" id="toggleBtn" class="secondary">Switch to Register</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="diaryView" class="hidden">
+        <div class="card">
+          <h2>Write a New Entry</h2>
+          <form id="entryForm">
+            <input id="entryTitle" name="title" placeholder="Title" required />
+            <textarea id="entryContent" name="content" rows="6" placeholder="What happened today?" required></textarea>
+            <input id="entryId" type="hidden" />
+            <div class="actions">
+              <button type="submit">Save Entry</button>
+              <button type="button" id="cancelEdit" class="secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Your Entries</h2>
+          <div id="entriesList"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const authView = document.getElementById('authView');
+      const diaryView = document.getElementById('diaryView');
+      const authForm = document.getElementById('authForm');
+      const entryForm = document.getElementById('entryForm');
+      const authBar = document.getElementById('authBar');
+      const submitBtn = document.getElementById('submitBtn');
+      const toggleBtn = document.getElementById('toggleBtn');
+      const entriesList = document.getElementById('entriesList');
+      const cancelEdit = document.getElementById('cancelEdit');
+      let isRegister = false;
+
+      async function checkSession() {
+        const res = await fetch('/api/session');
+        const data = await res.json();
+        if (data.loggedIn) {
+          showDiary(data.username);
+          loadEntries();
+        } else {
+          showAuth();
+        }
+      }
+
+      function showAuth() {
+        authView.classList.remove('hidden');
+        diaryView.classList.add('hidden');
+        authBar.innerHTML = '';
+      }
+
+      function showDiary(username) {
+        authView.classList.add('hidden');
+        diaryView.classList.remove('hidden');
+        authBar.innerHTML = `<strong>${username}</strong> <button id="logoutBtn" class="secondary">Logout</button>`;
+        document.getElementById('logoutBtn').addEventListener('click', logout);
+      }
+
+      toggleBtn.addEventListener('click', () => {
+        isRegister = !isRegister;
+        submitBtn.textContent = isRegister ? 'Register' : 'Login';
+        toggleBtn.textContent = isRegister ? 'Switch to Login' : 'Switch to Register';
+      });
+
+      authForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const endpoint = isRegister ? '/api/register' : '/api/login';
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        alert(data.message || data.error);
+        if (res.ok && !isRegister) {
+          checkSession();
+        }
+      });
+
+      async function logout() {
+        await fetch('/api/logout', { method: 'POST' });
+        checkSession();
+      }
+
+      async function loadEntries() {
+        const res = await fetch('/api/entries');
+        const entries = await res.json();
+        if (!entries.length) {
+          entriesList.innerHTML = '<p>No entries yet.</p>';
+          return;
+        }
+        entriesList.innerHTML = entries.map(entry => `
+          <div class="entry">
+            <h3>${entry.title}</h3>
+            <p>${entry.content.replace(/\n/g, '<br>')}</p>
+            <small>${new Date(entry.createdAt).toLocaleString()}</small>
+            <div class="actions">
+              <button onclick="editEntry('${entry.id}', '${entry.title.replace(/'/g, "\\'")}', '${entry.content.replace(/'/g, "\\'")}')">Edit</button>
+              <button class="secondary" onclick="deleteEntry('${entry.id}')">Delete</button>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      entryForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('entryId').value;
+        const title = document.getElementById('entryTitle').value;
+        const content = document.getElementById('entryContent').value;
+        const method = id ? 'PUT' : 'POST';
+        const url = id ? `/api/entries/${id}` : '/api/entries';
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, content })
+        });
+        const data = await res.json();
+        alert(data.message || data.error || 'Entry saved');
+        entryForm.reset();
+        document.getElementById('entryId').value = '';
+        loadEntries();
+      });
+
+      cancelEdit.addEventListener('click', () => {
+        entryForm.reset();
+        document.getElementById('entryId').value = '';
+      });
+
+      window.editEntry = (id, title, content) => {
+        document.getElementById('entryTitle').value = title;
+        document.getElementById('entryContent').value = content;
+        document.getElementById('entryId').value = id;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      window.deleteEntry = async (id) => {
+        if (!confirm('Delete this entry?')) return;
+        const res = await fetch(`/api/entries/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        alert(data.message || data.error);
+        loadEntries();
+      };
+
+      checkSession();
+    </script>
+  </body>
+</html>
