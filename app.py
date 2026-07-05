@@ -330,12 +330,11 @@ class DiaryHandler(BaseHTTPRequestHandler):
         return "application/octet-stream"
 
 
-def run_server(host: str = "127.0.0.1", port: int = 8000) -> None:
+def run_server(host: str = "0.0.0.0", port: int = int(os.environ.get("PORT", 8000))) -> None:
     ensure_data_files()
     server = ThreadingHTTPServer((host, port), DiaryHandler)
     print(f"Diary app running on http://{host}:{port}")
     server.serve_forever()
-
 
 if __name__ == "__main__":
     run_server()
